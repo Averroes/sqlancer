@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Random;
 import java.util.function.Supplier;
 
 public final class Randomly {
@@ -19,6 +19,8 @@ public final class Randomly {
     private static final String ALPHABET = new String(
             "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzöß!#<>/.,~-+'*()[]{} ^*?%_\t\n\r|&\\");
     private Supplier<String> provider;
+
+    private static final ThreadLocal<Random> THREAD_RANDOM = new ThreadLocal<>();
 
     private void addToCache(long val) {
         if (USE_CACHING && cachedLongs.size() < CACHE_SIZE && !cachedLongs.contains(val)) {
@@ -51,7 +53,7 @@ public final class Randomly {
             byte[] bytes = Randomly.fromList(cachedBytes);
             if (Randomly.getBoolean()) {
                 for (int i = 0; i < Randomly.smallNumber(); i++) {
-                    bytes[getInteger(0, bytes.length)] = (byte) ThreadLocalRandom.current().nextInt();
+                    bytes[getInteger(0, bytes.length)] = (byte) THREAD_RANDOM.get().nextInt();
                 }
             }
             return bytes;
@@ -114,28 +116,28 @@ public final class Randomly {
     }
 
     private static boolean cacheProbability() {
-        return USE_CACHING && ThreadLocalRandom.current().nextInt(3) == 1;
+        return USE_CACHING && getNextLong(0, 3) == 1;
     }
 
     // CACHING END
 
     public static <T> T fromList(List<T> list) {
-        return list.get(ThreadLocalRandom.current().nextInt(list.size()));
+        return list.get((int) getNextLong(0, list.size()));
     }
 
     @SafeVarargs
     public static <T> T fromOptions(T... options) {
-        return options[ThreadLocalRandom.current().nextInt(options.length)];
+        return options[getNextInt(0, options.length)];
     }
 
     @SafeVarargs
     public static <T> List<T> nonEmptySubset(T... options) {
-        int nr = 1 + ThreadLocalRandom.current().nextInt(options.length);
+        int nr = 1 + getNextInt(0, options.length);
         return extractNrRandomColumns(Arrays.asList(options), nr);
     }
 
     public static <T> List<T> nonEmptySubset(List<T> columns) {
-        int nr = 1 + ThreadLocalRandom.current().nextInt(columns.size());
+        int nr = 1 + getNextInt(0, columns.size());
         return nonEmptySubset(columns, nr);
     }
 
@@ -155,7 +157,7 @@ public final class Randomly {
     }
 
     public static <T> List<T> subset(List<T> columns) {
-        int nr = ThreadLocalRandom.current().nextInt(columns.size() + 1);
+        int nr = getNextInt(0, columns.size() + 1);
         return extractNrRandomColumns(columns, nr);
     }
 
@@ -180,18 +182,18 @@ public final class Randomly {
         List<T> selectedColumns = new ArrayList<>();
         List<T> remainingColumns = new ArrayList<>(columns);
         for (int i = 0; i < nr; i++) {
-            selectedColumns.add(remainingColumns.remove(ThreadLocalRandom.current().nextInt(remainingColumns.size())));
+            selectedColumns.add(remainingColumns.remove(getNextInt(0, remainingColumns.size())));
         }
         return selectedColumns;
     }
 
     public static int smallNumber() {
         // no need to cache for small numbers
-        return (int) (Math.abs(ThreadLocalRandom.current().nextGaussian()) * 2);
+        return (int) (Math.abs(THREAD_RANDOM.get().nextGaussian()) * 2);
     }
 
     public static boolean getBoolean() {
-        return ThreadLocalRandom.current().nextBoolean();
+        return THREAD_RANDOM.get().nextBoolean();
     }
 
     public long getInteger() {
@@ -204,7 +206,7 @@ public final class Randomly {
                     return l;
                 }
             }
-            long nextLong = ThreadLocalRandom.current().nextInt();
+            long nextLong = THREAD_RANDOM.get().nextInt();
             addToCache(nextLong);
             return nextLong;
         }
@@ -238,7 +240,7 @@ public final class Randomly {
                     sb.append(val);
                 }
             } else {
-                sb.append(ALPHABET.charAt(ThreadLocalRandom.current().nextInt(n)));
+                sb.append(ALPHABET.charAt(getNextInt(0, n)));
             }
         }
         while (Randomly.getBooleanWithSmallProbability()) {
@@ -275,7 +277,7 @@ public final class Randomly {
         }
         int size = Randomly.smallNumber();
         byte[] arr = new byte[size];
-        ThreadLocalRandom.current().nextBytes(arr);
+        THREAD_RANDOM.get().nextBytes(arr);
         return arr;
     }
 
@@ -309,7 +311,7 @@ public final class Randomly {
         if (smallBiasProbability()) {
             value = Randomly.fromOptions(0L, Long.MAX_VALUE, 1L);
         } else {
-            value = ThreadLocalRandom.current().nextLong(Long.MAX_VALUE);
+            value = getNextLong(0, Long.MAX_VALUE);
         }
         addToCache(value);
         assert value >= 0;
@@ -335,17 +337,17 @@ public final class Randomly {
                 return d;
             }
         }
-        double value = ThreadLocalRandom.current().nextDouble();
+        double value = THREAD_RANDOM.get().nextDouble();
         addToCache(value);
         return value;
     }
 
     private static boolean smallBiasProbability() {
-        return ThreadLocalRandom.current().nextInt(100) == 1;
+        return THREAD_RANDOM.get().nextInt(100) == 1;
     }
 
     public static boolean getBooleanWithRatherLowProbability() {
-        return ThreadLocalRandom.current().nextInt(10) == 1;
+        return THREAD_RANDOM.get().nextInt(10) == 1;
     }
 
     public static boolean getBooleanWithSmallProbability() {
@@ -356,18 +358,19 @@ public final class Randomly {
         if (left == right) {
             return left;
         }
-        return ThreadLocalRandom.current().nextInt(left, right);
+        return (int) getLong(left, right);
     }
 
+    // TODO redundant?
     public long getLong(long left, long right) {
         if (left == right) {
             return left;
         }
-        return ThreadLocalRandom.current().nextLong(left, right);
+        return getLong(left, right);
     }
 
     public BigDecimal getRandomBigDecimal() {
-        return new BigDecimal(ThreadLocalRandom.current().nextDouble());
+        return new BigDecimal(THREAD_RANDOM.get().nextDouble());
     }
 
     public long getPositiveIntegerNotNull() {
@@ -380,19 +383,19 @@ public final class Randomly {
     }
 
     public static long getNonCachedInteger() {
-        return ThreadLocalRandom.current().nextLong();
+        return THREAD_RANDOM.get().nextLong();
     }
 
     public static long getPositiveNonCachedInteger() {
-        return ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE);
+        return getNextLong(1, Long.MAX_VALUE);
     }
 
     public static long getPositiveOrZeroNonCachedInteger() {
-        return ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE);
+        return getNextLong(0, Long.MAX_VALUE);
     }
 
     public static long getNotCachedInteger(int lower, int upper) {
-        return ThreadLocalRandom.current().nextLong(lower, upper);
+        return getNextLong(lower, upper);
     }
 
     public Randomly(Supplier<String> provider) {
@@ -400,10 +403,15 @@ public final class Randomly {
     }
 
     public Randomly() {
+        THREAD_RANDOM.set(new Random());
+    }
+
+    public Randomly(long seed) {
+        THREAD_RANDOM.set(new Random(seed));
     }
 
     public static double getUncachedDouble() {
-        return ThreadLocalRandom.current().nextDouble();
+        return THREAD_RANDOM.get().nextDouble();
     }
 
     public String getChar() {
@@ -413,6 +421,17 @@ public final class Randomly {
                 return s.substring(0, 1);
             }
         }
+    }
+
+    // see https://stackoverflow.com/a/2546158
+    // uniformity does not seem to be important for us
+    // SQLancer previously used ThreadLocalRandom.current().nextLong(lower, upper)
+    private static long getNextLong(long lower, long upper) {
+        return lower + ((long) (THREAD_RANDOM.get().nextDouble() * (upper - lower)));
+    }
+
+    private static int getNextInt(int lower, int upper) {
+        return (int) getNextLong(lower, upper);
     }
 
 }
